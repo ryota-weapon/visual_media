@@ -1,17 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-from torchvision.datasets import MNIST, FashionMNIST
+from torchvision.datasets import MNIST
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from matplotlib import animation, rc
 
 matplotlib.use('TkAgg')
 matplotlib.interactive(False)
