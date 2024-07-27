@@ -1,4 +1,5 @@
 import os
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -47,7 +48,6 @@ class DiffusionModel(nn.Module):
     super(DiffusionModel, self).__init__()
     self.denoise_net = nn.Sequential(
       nn.Linear(latent_dim, 512),
-      # nn.Linear(latent_dim, 256),
       nn.ReLU(),
       nn.Linear(512, latent_dim)
     )
@@ -60,7 +60,7 @@ class DiffusionModel(nn.Module):
     return denoised
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-T = 1000
+T = 10
 num_epochs = 3
 
 latent_dim = 256
@@ -86,9 +86,8 @@ train_dataset = datasets.CIFAR10(root='data', train=True, download=True, transfo
 # Create a DataLoader
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0)
 
-
 for epoch in range(num_epochs):
-  for images, _labels in train_loader:
+  for images, _labels in tqdm(train_loader):
     images = images.to(device)
 
     # Encoder
@@ -111,23 +110,46 @@ for epoch in range(num_epochs):
     diffusion_optimizer.step()
     autoencoder_optimizer.step()
 
-    torch.save({
-      'encoder_state_dict': encoder.state_dict(),
-      'decoder_state_dict': decoder.state_dict(),
-      'diffusion_model_state_dict': diffusion_model.state_dict(),
-      'autoencoder_optimizer_state_dict': autoencoder_optimizer.state_dict(),
-      'diffusion_optimizer_state_dict': diffusion_optimizer.state_dict(),
-      'epoch': epoch,
-    }, os.path.join(model_save_path, f'ldm_checkpoint_epoch_{epoch}.pth'))
+  torch.save({
+    'encoder_state_dict': encoder.state_dict(),
+    'decoder_state_dict': decoder.state_dict(),
+    'diffusion_model_state_dict': diffusion_model.state_dict(),
+    'autoencoder_optimizer_state_dict': autoencoder_optimizer.state_dict(),
+    'diffusion_optimizer_state_dict': diffusion_optimizer.state_dict(),
+    'epoch': epoch,
+  }, os.path.join(model_save_path, f'ldm_checkpoint_epoch_{epoch}.pth'))
 
-    print(f'Epoch {epoch} model saved!')
+  print(f'Epoch {epoch} model saved!')
 
+model_save_path = 'models/ldm/'
+checkpoint_path = os.path.join(model_save_path, 'ldm_checkpoint_epoch_2.pth')
+checkpoint = torch.load(checkpoint_path)
+
+encoder.load_state_dict(checkpoint['encoder_state_dict'])
+decoder.load_state_dict(checkpoint['decoder_state_dict'])
+diffusion_model.load_state_dict(checkpoint['diffusion_model_state_dict'])
+autoencoder_optimizer.load_state_dict(checkpoint['autoencoder_optimizer_state_dict'])
+diffusion_optimizer.load_state_dict(checkpoint['diffusion_optimizer_state_dict'])
 
 def generate_image(encoder, decoder, diffusion_model):
+  encoder.to(device)
+  decoder.to(device)
+  diffusion_model.to(device)
+  
+  encoder.eval()
+  decoder.eval()
+  diffusion_model.eval()
+
   with torch.no_grad():
     z = torch.randn(1, latent_dim, device=device)
-    for t in reversed(range(T)):
+    for t in tqdm(reversed(range(T))):
+      t = torch.tensor([t], device=z.device, dtype=z.dtype)
       z = diffusion_model(z, t / T)
     generated_image = decoder(z)
   
   return generated_image
+
+import matplotlib.pyplot as plt
+image = generate_image(encoder, decoder, diffusion_model)
+plt.imshow(image.squeeze().cpu().numpy().transpose(1, 2, 0))
+plt.show()
